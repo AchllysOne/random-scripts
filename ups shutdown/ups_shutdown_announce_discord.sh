@@ -13,8 +13,8 @@ exec > >(tee -a $LOGFILE) 2>&1
 start_time=$(date +%s)
 
 # Discord Webhook URL and User ID for notifications
-WEBHOOK_URL="https://discord.com/api/webhooks/1312520227623276675/L0vNDnfy_RdFRcb-hEb8ivNoBBEbJWnpCZLzBMbPVCCjhZxTJOqefAEoQJriI-L7485T"
-USER_ID="1010584431427325993"
+WEBHOOK_URL="<put here>"
+USER_ID="<put here>"
 
 # Function to specifically ping and the shutdown attempt warning :O
 send_shutdown_warning(){
