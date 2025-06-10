@@ -1,55 +1,24 @@
 #!/bin/bash
-BACKUP_DIR="/path/to/immich/backup"
-UPLOAD_LOCATION="/path/to/immich/upload"
-DOCKER_USER="node"  # The user that runs Immich in containers (typically node or abc)
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <backup_timestamp>"
-    echo "Available backups:"
-    ls -lt "$BACKUP_DIR" | grep '^d'
-    exit 1
-fi
-
-BACKUP_PATH="$BACKUP_DIR/$1"
-
-if [ ! -d "$BACKUP_PATH" ]; then
-    echo "Error: Backup $1 not found!"
-    exit 1
-fi
-
-echo "=== IMMICH RESTORE PROCEDURE ==="
-echo "WARNING: This will delete all current Immich data!"
-read -p "Are you sure you want to continue? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    exit 1
-fi
-
-echo "[1/6] Stopping Immich services..."
-docker compose down -v
-
-echo "[2/6] Setting proper permissions on upload directory..."
-sudo chown -R $DOCKER_USER:$DOCKER_USER "$UPLOAD_LOCATION"
-sudo chmod -R 775 "$UPLOAD_LOCATION"
-
-echo "[3/6] Starting Postgres..."
+# Pull and create containers
+docker compose pull
 docker compose create
+
+# Start PostgreSQL and wait for it to be ready
 docker start immich_postgres
+sleep 15
 
-echo "[4/6] Waiting for Postgres to be ready..."
-sleep 10
+# 1. Restore the database with proper line ending handling
+gunzip --stdout "/mnt/configs/immich/taz/dump.sql.gz" \
+    | sed 's/\r\r$//g' \
+    | sed "s/SELECT pg_catalog.set_config('search_path', '', false);/SELECT pg_catalog.set_config('search_path', 'public, pg_c>    | docker exec -i immich_postgres psql --dbname=postgres --username=postgres
 
-echo "[5/6] Restoring database..."
-gunzip --stdout "$BACKUP_PATH/dump.sql.gz" \
-| sed "s/SELECT pg_catalog.set_config('search_path', '', false);/SELECT pg_catalog.set_config('search_path', 'public, pg_catalog', true);/g" \
-| docker exec -i immich_postgres psql --dbname=postgres --username=postgres
+# 2. Shutdown Immich containers
+docker compose down
 
-echo "[6/6] Restoring upload locations..."
-sudo -u $DOCKER_USER rsync -a --no-perms --no-owner --no-group "$BACKUP_PATH/library/" "$UPLOAD_LOCATION/library/"
-sudo -u $DOCKER_USER rsync -a --no-perms --no-owner --no-group "$BACKUP_PATH/upload/" "$UPLOAD_LOCATION/upload/"
-sudo -u $DOCKER_USER rsync -a --no-perms --no-owner --no-group "$BACKUP_PATH/profile/" "$UPLOAD_LOCATION/profile/"
+# 3. Restore uploads and start containers
+sudo mkdir -p /mnt/configs/immich/upload
+sudo tar -xzvf /mnt/configs/immich/taz/upload.tar.gz -C /mnt/configs/immich/upload
+sudo docker compose up -d
 
-echo "[7/6] Starting Immich services..."
-docker compose up -d
-
-echo "Restore completed from backup $1
+echo "Database restore completed. You can now start Immich with 'docker compose up -d'"
