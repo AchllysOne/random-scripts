@@ -4,35 +4,70 @@
 START_TIME=$(date +%s)
 
 # Configuration
-BACKUP_DIR="/mnt/configs/immich/taz"
-UPLOAD_DIR="/mnt/configs/immich/upload"
+IMMICH_DIR="/path/to/immich"  # Where Immich is installed (contains docker-compose.yml)
+BACKUP_DIR="/path/to/backups/immich"
+UPLOAD_DIR="$IMMICH_DIR/upload"   # Upload directory relative to Immich directory
 MAX_BACKUPS=3
 TIMESTAMP=$(date +"%B_%d_%Y_%I-%M%p")  # e.g. "June_11_2025_02-30PM"
+WEBHOOK_URL=""    # Your Discord webhook URL
+USER_ID_TO_PING=""  # Replace with the Discord user ID you want to ping when there are errors
+
+# Initialize status variables
+STATUS="✅ SUCCESS"
+ERROR_MESSAGES=()
+
+# Change to Immich directory for docker commands
+cd "$IMMICH_DIR" || {
+    ERROR_MESSAGES+=("Failed to access Immich directory: $IMMICH_DIR")
+    STATUS="❌ FAILED"
+    echo "${ERROR_MESSAGES[-1]}"
+    exit 1
+}
 
 # 1. Backup the database
 DB_BACKUP_FILE="$BACKUP_DIR/immich_db_$TIMESTAMP.sql.gz"
-docker exec -t immich_postgres pg_dumpall --clean --if-exists --username=postgres | gzip > "$DB_BACKUP_FILE"
-DB_BACKUP_STATUS=$?
+if ! docker exec -t immich_postgres pg_dumpall --clean --if-exists --username=postgres | gzip > "$DB_BACKUP_FILE"; then
+    ERROR_MESSAGES+=("Database backup failed")
+    STATUS="⚠️ COMPLETED WITH WARNINGS"
+    DB_BACKUP_STATUS=1
+else
+    DB_BACKUP_STATUS=0
+fi
 
 # 2. Shutdown Immich
-sudo docker compose down
-DOWN_STATUS=$?
+if ! sudo docker compose down; then
+    ERROR_MESSAGES+=("Failed to shutdown containers")
+    STATUS="⚠️ COMPLETED WITH WARNINGS"
+    DOWN_STATUS=1
+else
+    DOWN_STATUS=0
+fi
 
 # 3. Backup upload directory
 UPLOAD_BACKUP_FILE="$BACKUP_DIR/immich_uploads_$TIMESTAMP.tar.gz"
-tar -czf "$UPLOAD_BACKUP_FILE" -C "$UPLOAD_DIR" .
-UPLOAD_BACKUP_STATUS=$?
+if ! tar -czf "$UPLOAD_BACKUP_FILE" -C "$UPLOAD_DIR" .; then
+    ERROR_MESSAGES+=("Upload directory backup failed")
+    STATUS="⚠️ COMPLETED WITH WARNINGS"
+    UPLOAD_BACKUP_STATUS=1
+else
+    UPLOAD_BACKUP_STATUS=0
+fi
 
 # 4. Start Immich back up
-sudo docker compose up -d
-UP_STATUS=$?
+if ! sudo docker compose up -d; then
+    ERROR_MESSAGES+=("Failed to start containers")
+    STATUS="⚠️ COMPLETED WITH WARNINGS"
+    UP_STATUS=1
+else
+    UP_STATUS=0
+fi
 
 # Cleanup old backups - keep only MAX_BACKUPS
 # Database backups cleanup
-ls -t "$BACKUP_DIR"/immich_db_*.sql.gz | tail -n +$(($MAX_BACKUPS + 1)) | xargs rm -f 2>/dev/null
+find "$BACKUP_DIR" -name "immich_db_*.sql.gz" -type f | sort -r | tail -n +$(($MAX_BACKUPS + 1)) | xargs rm -f 2>/dev/null
 
 # Upload backups cleanup
-ls -t "$BACKUP_DIR"/immich_uploads_*.tar.gz | tail -n +$(($MAX_BACKUPS + 1)) | xargs rm -f 2>/dev/null
+find "$BACKUP_DIR" -name "immich_uploads_*.tar.gz" -type f | sort -r | tail -n +$(($MAX_BACKUPS + 1)) | xargs rm -f 2>/dev/null
 
 # Calculate duration
 END_TIME=$(date +%s)
@@ -43,27 +78,27 @@ DURATION_SEC=$((DURATION % 60))
 # Get backup size
 BACKUP_SIZE=$(du -sh "$BACKUP_DIR" | awk '{print $1}')
 
-# Prepare status message
-if [ $DB_BACKUP_STATUS -eq 0 ] && [ $DOWN_STATUS -eq 0 ] && [ $UPLOAD_BACKUP_STATUS -eq 0 ] && [ $UP_STATUS -eq 0 ]; then
-    STATUS="✅ SUCCESS"
-else
-    STATUS="⚠️ COMPLETED WITH WARNINGS"
-fi
-
-# Current date for version (already in readable format)
+# Current date for version
 CURRENT_DATE=$(date +'%I:%M%p %A %d %B %Y')
 
-# Discord webhook URL (replace with your actual webhook URL)
-WEBHOOK_URL=""
+# Prepare error message if any
+ERROR_FIELD=""
+if [ ${#ERROR_MESSAGES[@]} -gt 0 ]; then
+    ERROR_FIELD=$(printf '\\n- %s' "${ERROR_MESSAGES[@]}")
+    PING_USER="<@$USER_ID_TO_PING> "  # Add user ping only if there are errors
+else
+    PING_USER=""
+fi
 
 # Send notification to Discord
 curl -H "Content-Type: application/json" -d '{
+    "content": "'"$PING_USER"'",
     "embeds": [{
         "title": "Immich Backup Completed",
         "fields": [
             {
                 "name": "Backup Status",
-                "value": "'"$STATUS"'",
+                "value": "'"$STATUS$ERROR_FIELD"'",
                 "inline": true
             },
             {
