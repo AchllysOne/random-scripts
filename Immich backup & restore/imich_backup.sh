@@ -4,11 +4,11 @@
 START_TIME=$(date +%s)
 
 # Configuration
-IMMICH_DIR="/path/to/immich"  # Where Immich is installed (contains docker-compose.yml)
-BACKUP_DIR="/path/to/backups/immich"
+IMMICH_DIR="/mnt/configs/immich"  # Where Immich is installed (contains docker-compose.yml)
+BACKUP_DIR="/mnt/backups/immich"
 UPLOAD_DIR="$IMMICH_DIR/upload"   # Upload directory relative to Immich directory
 MAX_BACKUPS=3
-TIMESTAMP=$(date +"%B_%d_%Y_%I-%M%p")  # e.g. "June_11_2025_02-30PM"
+TIMESTAMP=$(date +"%B_%d_%Y_%I-%M %p")  # e.g. "June_11_2025_02-30PM"
 WEBHOOK_URL=""    # Your Discord webhook URL
 USER_ID_TO_PING=""  # Replace with the Discord user ID you want to ping when there are errors
 
@@ -78,8 +78,8 @@ DURATION_SEC=$((DURATION % 60))
 # Get backup size
 BACKUP_SIZE=$(du -sh "$BACKUP_DIR" | awk '{print $1}')
 
-# Current date for version
-CURRENT_DATE=$(date +'%I:%M%p %A %d %B %Y')
+# Current date for version - formatted as "Friday 13 June 2025 07:25 PM"
+CURRENT_DATE=$(date +'%A %d %B %Y %I:%M %p')
 
 # Prepare error message if any
 ERROR_FIELD=""

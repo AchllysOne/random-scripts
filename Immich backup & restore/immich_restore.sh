@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Define paths
-SCRIPT_DIR="/path/to/scripts"
-IMMICH_DIR="/path/to/immich"
-BACKUP_DIR="/path/to/immich"
+SCRIPT_DIR="/home/scripts"
+IMMICH_DIR="/mnt/configs/immich"
+BACKUP_DIR="/mnt/backups/immich"
 
 # Navigate to Immich directory
 cd "$IMMICH_DIR" || { echo "Failed to cd to $IMMICH_DIR"; exit 1; }
