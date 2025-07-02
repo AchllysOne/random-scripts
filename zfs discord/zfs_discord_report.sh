@@ -1,8 +1,8 @@
 #!/bin/bash
 
-POOL_NAME="<pool name>"
-DISCORD_WEBHOOK_URL="<Put it here>"
-USER_ID="<User ID to ping>"
+POOL_NAME=""
+DISCORD_WEBHOOK_URL=""
+USER_ID=""
 
 # Function to send a message to Discord
 send_discord_message() {
@@ -41,32 +41,10 @@ fi
 
 # Test condition for degraded status
 if [ "$1" == "test-degraded" ]; then
-    pool_status="  pool: $POOL_NAME
-    state: DEGRADED
-    status: One or more devices has been taken offline by the administrator.
-            Sufficient replicas exist for the pool to continue functioning in a
-            degraded state.
-      scan: resilvered 548K in 00:00:01 with 0 errors on Mon Aug  5 18:44:50 2024
-    config:
-
-        NAME        STATE     READ WRITE CKSUM
-        $POOL_NAME  DEGRADED     0     0     0
-          raidz3-0  DEGRADED     0     0     0
-            sda     ONLINE       0     0     0
-            sdh     ONLINE       0     0     0
-            sdi     ONLINE       0     0     0
-            sdc     ONLINE       0     0     0
-            sdb     ONLINE       0     0     0
-            sdd     ONLINE       0     0     0
-            sde     ONLINE       0     0     0
-            sdf     ONLINE       0     0     0
-            sdm     ONLINE       0     0     0
-            sdn     ONLINE       0     0     0
-            sdg     OFFLINE      0     0     0
-        cache
-          nvme1n1   ONLINE       0     0     0
-
-    errors: No known data errors"
+    # Get actual pool status but modify it to show a degraded state
+    pool_status=$(zpool status $POOL_NAME)
+    # Modify the status to simulate a degraded drive
+    pool_status=$(echo "$pool_status" | sed 's/ONLINE/OFFLINE/' | sed 's/state: ONLINE/state: DEGRADED/')
     check_pool_status "$pool_status"
     exit 0
 fi
